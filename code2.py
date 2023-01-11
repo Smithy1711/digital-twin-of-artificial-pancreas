@@ -88,3 +88,5 @@ plt.ylabel('L(t)')
 plt.show()
 
 np.savetxt("jejunum.csv", J, delimiter=",")
+np.savetxt("ileum.csv", L, delimiter=",")
+np.savetxt("stomach.csv", S, delimiter=",")
