@@ -31,7 +31,7 @@ u = 5 #cm/s, u is the average transit time of the small intestine, generally 0.1
 tau = l/u
 
 Gprod = 0.1 #mg/s, Gprod is the rate of glucose production in the stomach, generally 0.1-1mg/s
-n = 0.1 #mg/s, n is the rate of glucose absorption in the small intestine, generally 0.1-1mg/s
+n = 0.6 #mg/s, n is the rate of glucose absorption in the small intestine, generally 0.1-1mg/s
 
 # Initial conditions
 S0 = 75
@@ -64,7 +64,6 @@ G[0] = G0
 G_[0] = G0
 I[0] = I0
 
-
 # Solve differential equations
 def model():
     for i in range(1, len(time)):
@@ -92,7 +91,9 @@ def model():
         G[i] = G[i-1] + dGdt*dt
         I[i] = I[i-1] + dIdt*dt
 
+    return G, I
 
+'''
     # Plot solutions
 
     #Bolus value in the stomach over time
@@ -134,30 +135,16 @@ def model():
     # Save data to CSV files
     np.savetxt("values.csv", values, delimiter=",")
 
-def cost_function(theta, alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
+    '''
+
+
+def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
+    G, I = model()
     T = [0, 30, 60, 90, 120]
-    Gnum = solve_glucose_insulin_dynamics(theta)
-    Inum = solve_insulin_dynamics(theta)
-    J = 1 / (5 * (Gmax - Gmin) ** 2) * np.sum((Gexp - Gnum[T[i-1]]) ** 2)
-    J += alpha / (5 * (Imax - Imin) ** 2) * np.sum((Iexp - Inum[T[i-1]]) ** 2)
+    J = 1 / (5 * (Gmax - Gmin) ** 2) * np.sum((Gexp - G[T[1]]) ** 2)
+    J += alpha / (5 * (Imax - Imin) ** 2) * np.sum((Iexp - I[T[1]]) ** 2)
     return J
 
-def solve_glucose_insulin_dynamics(theta):
-    # Solve the glucose dynamics
-    G = np.zeros_like(time)
-    G[0] = G0
-    for i in range(1, len(time)):
-        dGdt = -kxg*G[i-1] - kxgi*G[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
-        G[i] = G[i-1] + dGdt*dt
-    return G
 
-def solve_insulin_dynamics(theta):
-    # Solve the insulin dynamics
-    I = np.zeros_like(time)
-    I[0] = I0
-    for i in range(1, len(time)):
-        G_[i] = G[i-1] + np.sum(fgj * (kgj * J + kgl * L))
-        dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib)
-        I[i] = I[i-1] + dIdt*dt
-    return I
+print(cost_function(1, 150, 7.1, 39, 373, 8.6, 5.9))
 
