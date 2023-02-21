@@ -3,6 +3,10 @@ import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 import pygad
 from scipy.optimize import minimize
+from scipy.optimize import differential_evolution
+
+
+
 
 
 # Constants
@@ -44,8 +48,6 @@ I0 = 0.0
 T = 120
 dt = 1.0
 time = np.arange(0, T, dt)
-
-t = np.linspace(0, 10, 100)
 
 # Solve differential equations
 '''
@@ -132,7 +134,7 @@ def Glucose_Insulin():
 
 def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
         G, I = Glucose_Insulin()
-        T = [0, 30, 60, 90, 120]
+        T = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120]
         J = 1 / (5 * (Gmax - Gmin) ** 2) * np.sum((Gexp - G[T[1]]) ** 2)
         J += alpha / (5 * (Imax - Imin) ** 2) * np.sum((Iexp - I[T[1]]) ** 2)
         return J
@@ -145,24 +147,33 @@ def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
 def objective(kjs, data):
     S = Stomach(kjs)
     S_ = np.zeros(len(data))
-    T = [1, 30, 60, 90, 120]
+    T = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120]
     for i in range(0, len(S_)):
         S_[i] = S[T[i]-1]
-    error = np.sum(np.square(S_ - data))
+    error = np.sum(np.square(S_ - data)) #mean squared error
+    
     return error
 
 data = np.loadtxt('data.txt')
+print(data)
 
-result = minimize(objective, x0=0.087, args=(data,))
+#result is 3.47% error
+result = minimize(objective, x0=0.087, args=(data,)) #used to minimize a scalar function of one or more variables
 print(result.x)
-print(objective(result.x, data))
+sRes = Stomach(result.x)
 
-from scipy.optimize import differential_evolution
 
+S_ = np.zeros(len(data))
+T = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120]
+for i in range(0, len(S_)):
+    S_[i] = sRes[T[i]-1]
+print(S_)
+
+'''
 bounds = [(0.0, 0.1)] # specify the bounds for kjs
-result2 = differential_evolution(objective, bounds=bounds, args=(data,))
+result2 = differential_evolution(objective, bounds=bounds, args=(data,)) #multi-dimensional, continuous function. used to find the global minima of a function
 print(result2.x)
-
+'''
 '''
     # Plot solutions
 

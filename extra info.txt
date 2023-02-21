@@ -1,0 +1,10 @@
+      fun: 226.41901182238456
+ hess_inv: array([[1.00453767e-08]])
+      jac: array([7.62939453e-06])
+  message: 'Optimization terminated successfully.'
+     nfev: 34
+      nit: 5
+     njev: 17
+   status: 0
+  success: True
+        x: array([0.00942084])
