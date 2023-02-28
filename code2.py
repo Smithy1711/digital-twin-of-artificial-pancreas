@@ -137,9 +137,15 @@ def Glucose_Insulin(kjs):
         G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1]))
         dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
         G[i] = G[i-1] + dGdt*dt
-        dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
+        #dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
         # beta and gamma are not needed in a diabetic person because they are not producing insulin. beta and gamma are parameters for half saturation and acceleration of the insulin production 
+        # insulin can take up to 30 mins before it starts to work. 1 to 3 hours for the peak activity. https://www.diabetes.co.uk/insulin/insulin-actions-and-durations.html
+        # can replace the acceleration with a delay? also may need to account for basal insulin or "left over insulin" in the body
         # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
+        if i < 30:
+            dIdt = 0
+        else:
+            dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib)
         I[i] = I[i-1] + dIdt*dt
 
     return G, I, J, L
@@ -148,25 +154,25 @@ def plot(G, I, J , L):
     #Amount of glucose in the jejunum over time
     plt.subplot(2, 2, 1)
     plt.plot(time, J, label='J(t)')
-    plt.xlabel('Time (s)')
+    plt.xlabel('Time (min)')
     plt.ylabel('J(t)')
 
     #Amount of glucose in the ilium over time
     plt.subplot(2, 2, 2)
     plt.plot(time, L)
-    plt.xlabel('Time (s)')
+    plt.xlabel('Time (min)')
     plt.ylabel('L(t)')
 
     #Glucose concentration in the blood over time
     plt.subplot(2, 2, 3)
     plt.plot(time, G)
-    plt.xlabel('Time (s)')
+    plt.xlabel('Time (min)')
     plt.ylabel('G(t)')
 
     #Insulin concentration in the blood over time
     plt.subplot(2, 2, 4)
     plt.plot(time, I)
-    plt.xlabel('Time (s)')
+    plt.xlabel('Time (min)')
     plt.ylabel('I(t)')
 
     plt.show()
@@ -177,6 +183,7 @@ def main():
     return G, I, J, L
 
 G, I, J, L = main()
+print("Insulin Dose: ", I[120], "uU/mL")
 plot(G, I, J, L)
 
 def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
