@@ -16,7 +16,7 @@ kgj = 0.005
 kjl = 0.025
 kgl = 0.025
 kxg = 0.0005
-fgj = 0.5
+fgj = 0.005
 kxi = 0.1
 kxgi = 0.0005
 
@@ -33,19 +33,18 @@ u = 5 #cm/s, u is the average transit time of the small intestine, generally 0.1
 
 tau = l/u
 
-Gprod = 0.1 #mg/s, Gprod is the rate of glucose production in the stomach, generally 0.1-1mg/s
+#Gprod = 0.1 #mg/s, Gprod is the rate of glucose production in the stomach, generally 0.1-1mg/s
 n = 0.6 #mg/s, n is the rate of glucose absorption in the small intestine, generally 0.1-1mg/s
 
 # Initial conditions
 S0 = 100
 J0 = 0.0
 L0 = 0.0
-G0 = 196
 I0 = 0.0
 
 
 # Time points
-T = 120
+T = 1000
 dt = 1.0
 time = np.arange(0, T, dt)
 
@@ -79,6 +78,17 @@ def model():
 
     return G, I
 '''
+
+#all equations
+'''
+dSdt = -kjs*S[i-1]
+dJdt = kjs*S[i-1] - kgj*J[i-1] - kjl*J[i-1]
+dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
+dLdt = kjl * phi - kgl * L[i-1]
+dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib)
+'''
+
+
 def Stomach(kjs):
     S = np.zeros_like(time)
     S[0] = S0
@@ -87,19 +97,19 @@ def Stomach(kjs):
         S[i] = S[i-1] + dSdt*dt
     return S
 
-def Jejunum():
+def Jejunum(kjs):
     J = np.zeros_like(time)
     J[0] = J0
-    S = Stomach()
+    S = Stomach(kjs)
     for i in range(1, len(time)):
         dJdt = kjs*S[i-1] - kgj*J[i-1] - kjl*J[i-1]
         J[i] = J[i-1] + dJdt*dt
     return J
 
-def Ileum():
+def Ileum(kjs):
     L = np.zeros_like(time)
     L[0] = L0
-    J = Jejunum()
+    J = Jejunum(kjs)
     for i in range(1, len(time)):
         # Calculate phi at current time step
         if time[i] < tau:
@@ -111,26 +121,63 @@ def Ileum():
         L[i] = L[i-1] + dLdt*dt
     return L
 
-def Glucose_Insulin():
-    G0 = 196
+def Glucose_Insulin(kjs):
+    G0 = 25
     G_ = np.zeros_like(time)
     G_[0] = G0
     I = np.zeros_like(time)
     I[0] = I0
     G = np.zeros_like(time)
     G[0] = G0
-    J = Jejunum()
-    L = Ileum()
+    J = Jejunum(kjs)
+    L = Ileum(kjs)
 
     for i in range(1, len(time)):
-        G_[i] = G[i-1] + np.sum(fgj * (kgj * J + kgl * L))
-        dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib)
-        I[i] = I[i-1] + dIdt*dt
+        Gprod = 1/(1+G[i-1])
+        G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1]))
         dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
         G[i] = G[i-1] + dGdt*dt
+        dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
+        # beta and gamma are not needed in a diabetic person because they are not producing insulin. beta and gamma are parameters for half saturation and acceleration of the insulin production 
+        # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
+        I[i] = I[i-1] + dIdt*dt
 
-    return G, I
-    
+    return G, I, J, L
+
+def plot(G, I, J , L):
+    #Amount of glucose in the jejunum over time
+    plt.subplot(2, 2, 1)
+    plt.plot(time, J, label='J(t)')
+    plt.xlabel('Time (s)')
+    plt.ylabel('J(t)')
+
+    #Amount of glucose in the ilium over time
+    plt.subplot(2, 2, 2)
+    plt.plot(time, L)
+    plt.xlabel('Time (s)')
+    plt.ylabel('L(t)')
+
+    #Glucose concentration in the blood over time
+    plt.subplot(2, 2, 3)
+    plt.plot(time, G)
+    plt.xlabel('Time (s)')
+    plt.ylabel('G(t)')
+
+    #Insulin concentration in the blood over time
+    plt.subplot(2, 2, 4)
+    plt.plot(time, I)
+    plt.xlabel('Time (s)')
+    plt.ylabel('I(t)')
+
+    plt.show()
+
+def main():
+    kjs = 0.01172569
+    G, I, J, L = Glucose_Insulin(kjs)
+    return G, I, J, L
+
+G, I, J, L = main()
+plot(G, I, J, L)
 
 def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
         G, I = Glucose_Insulin()
@@ -169,142 +216,113 @@ for i in range(0, len(S_)):
     S_[i] = sRes[T[i]-1]
 print(S_)
 
-'''
+
+
 bounds = [(0.0, 0.1)] # specify the bounds for kjs
 result2 = differential_evolution(objective, bounds=bounds, args=(data,)) #multi-dimensional, continuous function. used to find the global minima of a function
 print(result2.x)
-'''
-'''
-    # Plot solutions
-
-    #Bolus value in the stomach over time
-    plt.figure(figsize=(10, 5))
-    plt.subplot(2, 3, 1)
-    plt.plot(time, S, label='S(t)')
-    plt.xlabel('Time (s)')
-    plt.ylabel('S(t)')
-
-    #Amount of glucose in the jejunum over time
-    plt.subplot(2, 3, 2)
-    plt.plot(time, J, label='J(t)')
-    plt.xlabel('Time (s)')
-    plt.ylabel('J(t)')
-
-    #Amount of glucose in the ilium over time
-    plt.subplot(2, 3, 3)
-    plt.plot(time, L)
-    plt.xlabel('Time (s)')
-    plt.ylabel('L(t)')
-
-    #Glucose concentration in the blood over time
-    plt.subplot(2, 3, 4)
-    plt.plot(time, G)
-    plt.xlabel('Time (s)')
-    plt.ylabel('G(t)')
-
-    #Insulin concentration in the blood over time
-    plt.subplot(2, 2, 4)
-    plt.plot(time, I)
-    plt.xlabel('Time (s)')
-    plt.ylabel('I(t)')
 
 
-    plt.show()
-
-    values = np.hstack((S[:, np.newaxis], J[:, np.newaxis], L[:, np.newaxis], G[:, np.newaxis], I[:, np.newaxis]))
-
-    # Save data to CSV files
-    np.savetxt("values.csv", values, delimiter=",")
-
-class Model:
-
-    # Initial conditions
-
-    T = 500
-    dt = 1.0
-    time = np.arange(0, T, dt)
-
-    t = np.linspace(0, 10, 100)
-    
-    kjs = 0.015
-    kgj = 0.005
-    kjl = 0.025
-    kgl = 0.025
-    kxg = 0.0005
-    fgj = 0.5
-    kxi = 0.1
-    kxgi = 0.0005
+''''
+class GlucoseInsulin:
+    def __init__(self, kjs):
+        self.kjs = kjs
+        self.S0 = 100
+        self.J0 = 0.0
+        self.L0 = 0.0
+        self.I0 = 0.0
+        self.G0 = 25
 
 
+        self.S = np.zeros_like(time)
+        self.S[0] = self.S0
 
-    def __int__(self, S0, J0, L0, G0, G_0, I0, l, u, tau, Gprod, n, beta, Y, Ib, Gb):
-        self.S0 = S0
-        self.J0 = J0
-        self.L0 = L0
-        self.G0 = G0
-        self.G_0 = G_0
-        I0 = I0
-        self.l = l
-        self.u = u
-        self.tau = tau
-        self.Gprod = Gprod
-        self.n = n
-        self.beta = beta
-        self.Y = Y
-        self.Ib = Ib
-        self.Gb = Gb
+        self.J = np.zeros_like(time)
+        self.J[0] = self.J0
 
-    def 
+        self.G = np.zeros_like(time)
+        self.G[0] = self.G0
 
-    def Stomach(self):
-        for i in range(1, len(self.time)):
-            dSdt = -self.kjs*S[i-1]
-            self.S[i] = self.S[i-1] + dSdt*dt
-        return S
+        self.I = np.zeros_like(time)
+        self.I[0] = self.I0
 
-    def Jejunum(self):
+        self.L = np.zeros_like(time)
+        self.L[0] = self.L0
+
+
+    def stomach(self):
+        
         for i in range(1, len(time)):
-            dJdt = kjs*S[i-1] - kgj*J[i-1] - kjl*J[i-1]
-            J[i] = J[i-1] + dJdt*dt
-        return J
+            dSdt = -self.kjs * self.S[i-1]
+            self.S[i] = self.S[i-1] + dSdt * dt
 
-    def Ileum(self):
+    def jejunum(self):
+        gi = GlucoseInsulin(0.01172569)
+        S = gi.stomach()
+        print(S)
+        print(self.stomach())
         for i in range(1, len(time)):
-            # Calculate phi at current time step
+            dJdt = self.kjs * S[i-1] - kgj * self.J[i-1] - kjl * self.J[i-1]
+            self.J[i] = self.J[i-1] + dJdt * dt
+
+    def ileum(self):
+        gi = GlucoseInsulin(0.01172569)
+        J = gi.jejunum()
+        for i in range(1, len(time)):
             if time[i] < tau:
                 phi = 0
             else:
                 phi = J[np.floor(i-tau).astype(int)]
-            # Calculate derivative at current time step
-            dLdt = kjl * phi - kgl * L[i-1]
-            L[i] = L[i-1] + dLdt*dt
-        return L
+            dLdt = kjl * phi - kgl * self.L[i-1]
+            self.L[i] = self.L[i-1] + dLdt * dt
 
-    def Glucose(self):
+    def glucose_insulin(self):
+        gi = GlucoseInsulin(0.01172569)
+        L = gi.ileum()
+        J = gi.jejunum()
         for i in range(1, len(time)):
-            dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
-            G[i] = G[i-1] + dGdt*dt
-        return G
+            Gprod = 0.1  # mg/s
+            G_ = self.G[i-1] + np.sum(fgj * (kgj * J + kgl * L))
+            dGdt = -kxg * self.G[i-1] - kxgi * self.G[i-1] * self.I[i-1] + Gprod + n * (kgj * J[i-1] + kgl * L[i-1])
+            dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_))**Y + 1) - self.I[i-1]/Ib)
+            # beta and gamma are not needed in a diabetic person because they are not producing insulin. beta and gamma are parameters for half saturation and acceleration of the insulin production 
+            # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
+            self.G[i] = self.G[i-1] + dGdt * dt
+            self.I[i] = self.I[i-1] + dIdt * dt
 
-    def Insulin(self):
-        G0 = 196
-        G_ = np.zeros_like(self.time)
-        G_[0] = G0
-        for i in range(1, len(time)):
-            G_[i] = G[i-1] + np.sum(fgj * (kgj * J + kgl * L))
-            dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib)
-            I[i] = I[i-1] + dIdt*dt
-        return I
-
-    def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
-        G = Glucose()
-        I = Insulin()
-        T = [0, 30, 60, 90, 120]
-        J = 1 / (5 * (Gmax - Gmin) ** 2) * np.sum((Gexp - G[T[1]]) ** 2)
-        J += alpha / (5 * (Imax - Imin) ** 2) * np.sum((Iexp - I[T[1]]) ** 2)
-        return J
+        return self.G, self.I
 
 
-    print(cost_function(1, 150, 7.1, 39, 373, 8.6, 5.9))
+gi = GlucoseInsulin(0.01172569)
 
+L = gi.ileum()
+J = gi.jejunum()
+G, I = gi.glucose_insulin()
+
+
+#Amount of glucose in the jejunum over time
+plt.subplot(2, 2, 1)
+plt.plot(time, J, label='J(t)')
+plt.xlabel('Time (s)')
+plt.ylabel('J(t)')
+
+#Amount of glucose in the ilium over time
+plt.subplot(2, 2, 2)
+plt.plot(time, L)
+plt.xlabel('Time (s)')
+plt.ylabel('L(t)')
+
+#Glucose concentration in the blood over time
+plt.subplot(2, 2, 3)
+plt.plot(time, G)
+plt.xlabel('Time (s)')
+plt.ylabel('G(t)')
+
+#Insulin concentration in the blood over time
+plt.subplot(2, 2, 4)
+plt.plot(time, I)
+plt.xlabel('Time (s)')
+plt.ylabel('I(t)')
+
+plt.show()
 '''
