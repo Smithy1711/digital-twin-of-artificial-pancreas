@@ -37,16 +37,18 @@ tau = l/u
 n = 0.6 #mg/s, n is the rate of glucose absorption in the small intestine, generally 0.1-1mg/s
 
 # Initial conditions
-S0 = 100
+S0 = 0
 J0 = 0.0
 L0 = 0.0
-I0 = 0.0
+I0 = 0
 
 
 # Time points
 T = 1000
 dt = 1.0
 time = np.arange(0, T, dt)
+
+GI_ratio = 8
 
 # Solve differential equations
 '''
@@ -122,7 +124,7 @@ def Ileum(kjs):
     return L
 
 def Glucose_Insulin(kjs):
-    G0 = 25
+    G0 = 20
     G_ = np.zeros_like(time)
     G_[0] = G0
     I = np.zeros_like(time)
@@ -132,20 +134,34 @@ def Glucose_Insulin(kjs):
     J = Jejunum(kjs)
     L = Ileum(kjs)
 
+
     for i in range(1, len(time)):
-        Gprod = 1/(1+G[i-1])
-        G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1]))
+        Gprod = 1/(1+G[i-1]) 
+        #G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1])) not needed in a person with type 1 diabetes
+
         dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
-        G[i] = G[i-1] + dGdt*dt
-        #dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
+        
+        # when a value >0 is given for G0 then dGdt will give the natural loss of glucose.
+        # also making there be no bolus then J and L are 0. also I is 0 as there is no administration of insuline
+        # therefore dGdt is just -kxg*G[i-1]
+        # 
+
+        G[i] = G[i-1] + dGdt*dt # when dgdt*dt becomes <0 find value of dgdt. this gives natural loss of glucose in the blood.
+
+
+        # dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
         # beta and gamma are not needed in a diabetic person because they are not producing insulin. beta and gamma are parameters for half saturation and acceleration of the insulin production 
         # insulin can take up to 30 mins before it starts to work. 1 to 3 hours for the peak activity. https://www.diabetes.co.uk/insulin/insulin-actions-and-durations.html
         # can replace the acceleration with a delay? also may need to account for basal insulin or "left over insulin" in the body
         # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
+
+        if dGdt > 10:
+            print(Gprod)
+
         if i < 30:
             dIdt = 0
         else:
-            dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib)
+            dIdt = kxi * (- I[i-1])
         I[i] = I[i-1] + dIdt*dt
 
     return G, I, J, L
@@ -177,27 +193,6 @@ def plot(G, I, J , L):
 
     plt.show()
 
-def main():
-    kjs = 0.01172569
-    G, I, J, L = Glucose_Insulin(kjs)
-    return G, I, J, L
-
-G, I, J, L = main()
-print("Insulin Dose: ", I[120], "uU/mL")
-plot(G, I, J, L)
-
-def cost_function(alpha, Gexp, Iexp, Gmax, Gmin, Imax, Imin):
-        G, I = Glucose_Insulin()
-        T = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120]
-        J = 1 / (5 * (Gmax - Gmin) ** 2) * np.sum((Gexp - G[T[1]]) ** 2)
-        J += alpha / (5 * (Imax - Imin) ** 2) * np.sum((Iexp - I[T[1]]) ** 2)
-        return J
-
-
-#print(cost_function(1, 150, 7.1, 39, 373, 8.6, 5.9))
-
-
-
 def objective(kjs, data):
     S = Stomach(kjs)
     S_ = np.zeros(len(data))
@@ -211,26 +206,27 @@ def objective(kjs, data):
 data = np.loadtxt('data.txt')
 print(data)
 
-#result is 3.47% error
 result = minimize(objective, x0=0.087, args=(data,)) #used to minimize a scalar function of one or more variables
 print(result.x)
 sRes = Stomach(result.x)
 
 
-S_ = np.zeros(len(data))
-T = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120]
-for i in range(0, len(S_)):
-    S_[i] = sRes[T[i]-1]
-print(S_)
+def main():
+    kjs = result.x
+    G, I, J, L = Glucose_Insulin(kjs)
+    return G, I, J, L
 
+G, I, J, L = main()
+print("Insulin Dose: ", I[120], "uU/mL")
+plot(G, I, J, L)
 
-
+'''
 bounds = [(0.0, 0.1)] # specify the bounds for kjs
 result2 = differential_evolution(objective, bounds=bounds, args=(data,)) #multi-dimensional, continuous function. used to find the global minima of a function
 print(result2.x)
+'''
 
-
-''''
+'''
 class GlucoseInsulin:
     def __init__(self, kjs):
         self.kjs = kjs
