@@ -8,3 +8,8 @@
    status: 0
   success: True
         x: array([0.00942084])
+
+
+
+
+kxi fitting algorithm

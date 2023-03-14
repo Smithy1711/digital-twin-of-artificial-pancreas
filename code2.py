@@ -17,7 +17,6 @@ kjl = 0.025
 kgl = 0.025
 kxg = 0.0005
 fgj = 0.005
-kxi = 0.1
 kxgi = 0.0005
 
 beta = 0.5
@@ -37,10 +36,15 @@ tau = l/u
 n = 0.6 #mg/s, n is the rate of glucose absorption in the small intestine, generally 0.1-1mg/s
 
 # Initial conditions
-S0 = 0
+S0 = 75
 J0 = 0.0
 L0 = 0.0
-I0 = 0
+
+G0 = 25
+I0 = 12
+
+Gprod0 = 2
+
 
 
 # Time points
@@ -123,28 +127,28 @@ def Ileum(kjs):
         L[i] = L[i-1] + dLdt*dt
     return L
 
-def Glucose_Insulin(kjs):
-    G0 = 20
+def Glucose_Insulin(kjs, kxi, klambda, k2, x, G0, I0, Gprod0):
     G_ = np.zeros_like(time)
     G_[0] = G0
     I = np.zeros_like(time)
     I[0] = I0
     G = np.zeros_like(time)
     G[0] = G0
+    Gprod = np.zeros_like(time)
+    Gprod[0] = Gprod0
     J = Jejunum(kjs)
     L = Ileum(kjs)
 
 
     for i in range(1, len(time)):
-        Gprod = 1/(1+G[i-1]) 
+        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + (Gb - x)) + Gprod[0]
         #G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1])) not needed in a person with type 1 diabetes
 
-        dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod + n*(kgj*J[i-1] + kgl*L[i-1])
+        dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
         
         # when a value >0 is given for G0 then dGdt will give the natural loss of glucose.
         # also making there be no bolus then J and L are 0. also I is 0 as there is no administration of insuline
         # therefore dGdt is just -kxg*G[i-1]
-        # 
 
         G[i] = G[i-1] + dGdt*dt # when dgdt*dt becomes <0 find value of dgdt. this gives natural loss of glucose in the blood.
 
@@ -154,9 +158,6 @@ def Glucose_Insulin(kjs):
         # insulin can take up to 30 mins before it starts to work. 1 to 3 hours for the peak activity. https://www.diabetes.co.uk/insulin/insulin-actions-and-durations.html
         # can replace the acceleration with a delay? also may need to account for basal insulin or "left over insulin" in the body
         # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
-
-        if dGdt > 10:
-            print(Gprod)
 
         if i < 30:
             dIdt = 0
@@ -193,8 +194,8 @@ def plot(G, I, J , L):
 
     plt.show()
 
-def objective(kjs, data):
-    S = Stomach(kjs)
+def objectiveS(x, data):
+    S = Stomach(x)
     S_ = np.zeros(len(data))
     T = [1, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120]
     for i in range(0, len(S_)):
@@ -203,21 +204,51 @@ def objective(kjs, data):
     
     return error
 
-data = np.loadtxt('data.txt')
-print(data)
+def objectiveI(x, data, kjs):
+    G, I, J, L = Glucose_Insulin(kjs, x, G0, I0)
+    I_ = np.zeros(len(data))
+    T = [1, 15, 30, 45, 60, 75, 90, 105, 120]
+    for i in range(0, len(I_)):
+        I_[i] = I[T[i]-1]
+    error = np.sum(np.square(I_ - data)) #mean squared error
+    
+    return error
 
-result = minimize(objective, x0=0.087, args=(data,)) #used to minimize a scalar function of one or more variables
-print(result.x)
-sRes = Stomach(result.x)
+def objectiveGprod(klambda, k2, x1, data):
+    g = gprod(klambda, k2, x1)
+    g_ = np.zeros(len(data))
+    T = [1, 15, 30, 45, 60, 75, 90, 105, 120]
+    for i in range(0, len(g_)):
+        g_[i] = g[T[i]-1]
+    error = np.sum(np.square(g_ - data)) #mean squared error
+
+    return error
+
+#supplementry function for Gprod parameter fitting
+def gprod(klambda, k2, x1):
+    Gprod = np.zeros_like(time)
+    Gprod[0] = Gprod0
+    for i in range(1, len(time)):
+        Gprod = (klambda * (Gb-G[i-1])) / (k2 + (Gb - x1)) + Gprod[0]
+    return Gprod
+
+dataS = np.loadtxt('dataS.txt')
+resultS = minimize(objectiveS, x0=0.01, args=(dataS,)) #used to minimize a scalar function of one or more variables
+print(resultS.x)
+
+
+dataI = np.loadtxt('dataI.txt')
+resultI = minimize(objectiveI, x0=0.01, args=(dataI,resultS.x,)) #used to minimize a scalar function of one or more variables
+print(resultI.x)
 
 
 def main():
-    kjs = result.x
-    G, I, J, L = Glucose_Insulin(kjs)
+    kjs = resultS.x
+    kxi = resultI.x
+    G, I, J, L = Glucose_Insulin(kjs, kxi, G0, I0)
     return G, I, J, L
 
 G, I, J, L = main()
-print("Insulin Dose: ", I[120], "uU/mL")
 plot(G, I, J, L)
 
 '''
