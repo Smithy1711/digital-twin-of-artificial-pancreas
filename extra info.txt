@@ -13,3 +13,5 @@
 
 
 kxi fitting algorithm
+
+run model with made up parameters then run the parameter fitting with that data and compare with parameter
