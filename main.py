@@ -64,11 +64,20 @@ def Ileum(kjs, kgj, kjl, kgl):
         L[i] = L[i-1] + dLdt*dt
     return L
 
+def Insulin(kxi):
+    I = np.zeros_like(time)
+    I[0] = I0
+    for i in range(1, len(time)):
+        if i < 30:
+            dIdt = 0
+        else:
+            dIdt = -kxi*I[i-1]
+        I[i] = I[i-1] + dIdt*dt
+    return I
+
 def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
     #G_ = np.zeros_like(time)
     #G_[0] = G0
-    I = np.zeros_like(time)
-    I[0] = I0
     G = np.zeros_like(time)
     G[0] = G0
     Gprod = np.zeros_like(time)
@@ -76,10 +85,11 @@ def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
     J = Jejunum(kjs, kgj, kjl)
     L = Ileum(kjs, kgj, kjl, kgl)
     S = Stomach(kjs)
+    I = Insulin(kxi)
 
 
     for i in range(1, len(time)):
-        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + (Gb - x)) + Gprod[0] 
+        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + Gb - x) + Gprod[0] 
         
         #klambda - mM2 min−1 Kinetic constant for hepatic glucose release rate
 
@@ -99,14 +109,10 @@ def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
         # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
 
         if i < 30:
-            dIdt = 0
             dGdt = -kxg*G[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
-            print(-kxg*G[i-1])
         else:
             dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
-            dIdt = -kxi * (I[i-1])
         G[i] = G[i-1] + dGdt*dt # when dgdt*dt becomes <0 find value of dgdt. this gives natural loss of glucose in the blood.
-        I[i] = I[i-1] + dIdt*dt
 
     return S, G, I, J, L, Gprod
 
