@@ -168,39 +168,94 @@ resultI = minimize(objectiveI, x0=0.05, args=(dataI,)) #used to minimize a scala
 kxi = resultI.x[0]
 
 print(kjs, kxi)
-#print("Param | Init | Fitted \n ---------------- \n kjs | ", IP[0], " | ", kjs, " \n kxi | ", IP[1], " | ", kxi, " \n kgj | ", IP[2], " | ", kgj, " \n kjl | ", IP[3], " | ", kjl, " \n kgl | ", IP[4], " | ", kgl, " \n kxg | ", IP[5], " | ", kxg, " \n kxgi | ", IP[6], " | ", kxgi, " \n n | ", IP[7], " | ", n, " \n klambda | ", IP[8], " | ", klambda, " \n k2 | ", IP[9], " | ", k2, " \n x | ", IP[10], " | ", x1, " \n ---------------- \n")
 
 def error_function(params):
     # Get the model predictions using the current parameters
-    S, G, I, J, L, Gprod = Glucose_Insulin(*params)
+    S, G, I, J, L, Gprod = Glucose_Insulin_Fixed(*params)
 
     # Calculate the error (sum of squared differences) between the model predictions and the data
-    error_S = np.sum((S - dataS)**2)
+    #error_S = np.sum((S - dataS)**2)
     error_G = np.sum((G - dataG)**2)
-    error_I = np.sum((I - dataI)**2)
-    error_J = np.sum((J - dataJ)**2)
-    error_L = np.sum((L - dataL)**2)
-    error_Gprod = np.sum((Gprod - dataGprod)**2)
+    #error_I = np.sum((I - dataI)**2)
+    #error_J = np.sum((J - dataJ)**2)
+    #error_L = np.sum((L - dataL)**2)
+    #error_Gprod = np.sum((Gprod - dataGprod)**2)
 
     # Return the total error
-    return error_S + error_G + error_I + error_J + error_L + error_Gprod
+    #return error_S + error_G + error_I + error_J + error_L + error_Gprod
+    return error_G
+
+def Glucose_Insulin_Fixed(kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x):
+    #G_ = np.zeros_like(time)
+    #G_[0] = G0
+    G = np.zeros_like(time)
+    G[0] = G0
+    Gprod = np.zeros_like(time)
+    Gprod[0] = Gprod0
+    J = Jejunum(kjs, kgj, kjl)
+    L = Ileum(kjs, kgj, kjl, kgl)
+    S = Stomach(kjs)
+    I = Insulin(kxi)
+
+    for i in range(1, len(time)):
+        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + (Gb - x)) + Gprod[0] 
+        
+        #klambda - mM2 min−1 Kinetic constant for hepatic glucose release rate
+
+        
+        #G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1])) not needed in a person with type 1 diabetes
+
+        
+        # when a value >0 is given for G0 then dGdt will give the natural loss of glucose.
+        # also making there be no bolus then J and L are 0. also I is 0 as there is no administration of insuline
+        # therefore dGdt is just -kxg*G[i-1]
+
+        # dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
+        # beta and gamma are not needed in a diabetic person because they are not producing insulin. beta and gamma are parameters for half saturation and acceleration of the insulin production 
+        # insulin can take up to 30 mins before it starts to work. 1 to 3 hours for the peak activity. https://www.diabetes.co.uk/insulin/insulin-actions-and-durations.html
+        # can replace the acceleration with a delay? also may need to account for basal insulin or "left over insulin" in the body
+        # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
+        if i < 30:
+            dGdt = -kxg*G[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
+        else:
+            dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
+        G[i] = G[i-1] + dGdt*dt # when dgdt*dt becomes <0 find value of dgdt. this gives natural loss of glucose in the blood.
+
+    return S, G, I, J, L, Gprod
+
 
 # Set the bounds for the parameters
-bounds = [(0.01, 0.1), (0.01, 0.1), (0.01, 0.1), (0.001, 0.1), (0.01, 0.1), (0.01, 0.1), (0.01, 0.1), (0.001, 0.1), (0.1, 1), (10, 30), (10, 30)]
+bounds = [(0.01, 0.1), (0.004, 0.01), (0.01, 0.06), (0.01, 0.06), (0.01, 0.05), (0.005, 0.05), (0.4, 0.8), (12, 25), (12, 26)]
 
 # Use differential_evolution to find the best parameters
-#result = differential_evolution(error_function, bounds, strategy='best1bin', popsize=50, mutation=(0.5, 1), recombination=0.7, tol=0.01)
+result = differential_evolution(error_function, bounds, strategy='best1bin', popsize=50, mutation=(0.5, 1), recombination=0.7, tol=0.01)
 
 # Get the optimal parameters from the result
-#optimal_params = result.x
+optimal_params = result.x
 
-optimal_params = [3.40021405e-02, 5.65384889e-02, 1.75511863e-02, 1.00000000e-01, 1.91951275e-02, 8.62602464e-02, 7.07340053e-02, 2.75809316e-02, 1.00000000e-01, 2.89764446e+01, 1.01013288e+01]
+np.savetxt('dataOpt3.csv', optimal_params, delimiter=',')
+
+kgj = optimal_params[0]
+kjl = optimal_params[1]
+kgl = optimal_params[2]
+kxg = optimal_params[3]
+kxgi = optimal_params[4]
+n = optimal_params[5]
+klambda = optimal_params[6]
+k2 = optimal_params[7]
+x = optimal_params[8]
+
+IP = [0.034, 0.025, 0.067, 0.007, 0.02, 0.018, 0.028, 0.01, 0.6, 22, 16]
+print("Param | Init | Fitted \n ---------------- \n kjs | ", IP[0], " | ", kjs, " \n kxi | ", IP[1], " | ", kxi, " \n kgj | ", IP[2], " | ", kgj, " \n kjl | ", IP[3], " | ", kjl, " \n kgl | ", IP[4], " | ", kgl, " \n kxg | ", IP[5], " | ", kxg, " \n kxgi | ", IP[6], " | ", kxgi, " \n n | ", IP[7], " | ", n, " \n klambda | ", IP[8], " | ", klambda, " \n k2 | ", IP[9], " | ", k2, " \n x | ", IP[10], " | ", x, " \n ---------------- \n")
+
+
+#optimal_params = [3.40021405e-02, 5.65384889e-02, 1.75511863e-02, 1.00000000e-01, 1.91951275e-02, 8.62602464e-02, 7.07340053e-02, 2.75809316e-02, 1.00000000e-01, 2.89764446e+01, 1.01013288e+01]
 
 # Print the optimal parameters
-print("Optimal parameters:", optimal_params)
+#print("Optimal parameters:", optimal_params)
 
 # Run the simulation with the optimal parameters and compare the results with the data
-S_opt, G_opt, I_opt, J_opt, L_opt, Gprod_opt = Glucose_Insulin(*optimal_params)
+S_opt, G_opt, I_opt, J_opt, L_opt, Gprod_opt = Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x)
 
 
 print("done")

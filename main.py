@@ -118,10 +118,10 @@ def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
 
 def main():
     kjs = 0.034
-    kxi = 0.025
     kgj = 0.067
     kjl = 0.007
     kgl = 0.02
+    kxi = 0.025
     kxg = 0.018
     kxgi = 0.028
     n = 0.01
