@@ -89,8 +89,6 @@ def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
 
 
     for i in range(1, len(time)):
-        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + Gb - x) + Gprod[0] 
-        
         #klambda - mM2 min−1 Kinetic constant for hepatic glucose release rate
 
         
@@ -107,12 +105,13 @@ def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
         # insulin can take up to 30 mins before it starts to work. 1 to 3 hours for the peak activity. https://www.diabetes.co.uk/insulin/insulin-actions-and-durations.html
         # can replace the acceleration with a delay? also may need to account for basal insulin or "left over insulin" in the body
         # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)
-
+        
+        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + Gb - x) + Gprod[0] 
         if i < 30:
             dGdt = -kxg*G[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
         else:
             dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
-        G[i] = G[i-1] + dGdt*dt # when dgdt*dt becomes <0 find value of dgdt. this gives natural loss of glucose in the blood.
+        G[i] = G[i-1] + dGdt*dt
 
     return S, G, I, J, L, Gprod
 

@@ -249,6 +249,8 @@ IP = [0.034, 0.025, 0.067, 0.007, 0.02, 0.018, 0.028, 0.01, 0.6, 22, 16]
 print("Param | Init | Fitted \n ---------------- \n kjs | ", IP[0], " | ", kjs, " \n kxi | ", IP[1], " | ", kxi, " \n kgj | ", IP[2], " | ", kgj, " \n kjl | ", IP[3], " | ", kjl, " \n kgl | ", IP[4], " | ", kgl, " \n kxg | ", IP[5], " | ", kxg, " \n kxgi | ", IP[6], " | ", kxgi, " \n n | ", IP[7], " | ", n, " \n klambda | ", IP[8], " | ", klambda, " \n k2 | ", IP[9], " | ", k2, " \n x | ", IP[10], " | ", x, " \n ---------------- \n")
 
 
+#dataO = np.loadtxt('dataOpt3.csv', delimiter=',')
+#kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x = dataO[0], dataO[1], dataO[2], dataO[3], dataO[4], dataO[5], dataO[6], dataO[7], dataO[8]
 #optimal_params = [3.40021405e-02, 5.65384889e-02, 1.75511863e-02, 1.00000000e-01, 1.91951275e-02, 8.62602464e-02, 7.07340053e-02, 2.75809316e-02, 1.00000000e-01, 2.89764446e+01, 1.01013288e+01]
 
 # Print the optimal parameters
@@ -264,28 +266,24 @@ plt.figure()
 plt.subplot(3,2,1)
 plt.plot(time, G_opt, label="Simulated Glucose")
 plt.plot(time, dataG, label="Experimental Glucose")
-plt.xlabel("Time")
 plt.ylabel("Glucose Concentration")
 plt.legend()
 
 plt.subplot(3,2,2)
 plt.plot(time, I_opt, label="Simulated Insulin")
 plt.plot(time, dataI, label="Experimental Insulin")
-plt.xlabel("Time")
 plt.ylabel("Insulin Concentration")
 plt.legend()
 
 plt.subplot(3,2,3)
 plt.plot(time, J_opt, label="Simulated Jejunum")
 plt.plot(time, dataJ, label="Experimental Jejunum")
-plt.xlabel("Time")
 plt.ylabel("Jejunum Concentration")
 plt.legend()
 
 plt.subplot(3,2,4)
 plt.plot(time, L_opt, label="Simulated Ileum")
 plt.plot(time, dataL, label="Experimental Ileum")
-plt.xlabel("Time")
 plt.ylabel("Ileum Concentration")
 plt.legend()
 
