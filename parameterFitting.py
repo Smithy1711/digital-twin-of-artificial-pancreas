@@ -17,7 +17,7 @@ time = np.arange(0, T, dt)
 Ib = 10
 Gb = 100 
 
-l = 600 #cm, l is the length of the small intestine from the jejunum to the ilium, generally 600-700cm
+l = 300 #cm, l is the length of the small intestine from the jejunum to the ilium, generally 600-700cm
 u = 5 #cm/s, u is the average transit time of the small intestine, generally 0.1-10cm/s
         #velocity will depend on factors such as the contractile force of the intestine, the viscosity of the contents of the intestine, and the diameter of the intestine
 
@@ -173,7 +173,6 @@ def error_function(params):
 
     # Calculate the error (sum of squared differences) between the model predictions and the data
     error_S = np.sum((S - dataS)**2)
-    print(error_S)
     error_G = np.sum((G - dataG)**2)
     error_I = np.sum((I - dataI)**2)
     error_J = np.sum((J - dataJ)**2)
