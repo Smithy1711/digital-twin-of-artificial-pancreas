@@ -31,7 +31,18 @@ L0 = 0.0
 G0 = 25
 I0 = 12
 
-Gprod0 = 2
+Gprod0 = 0
+
+dataS = np.loadtxt('Data/dataS.csv', delimiter=',')
+dataJ = np.loadtxt('Data/dataJ.csv', delimiter=',')
+dataL = np.loadtxt('Data/dataL.csv', delimiter=',')
+dataGprod = np.loadtxt('Data/dataGprod.csv', delimiter=',')
+dataI = np.loadtxt('Data/dataI.csv', delimiter=',')
+dataG = np.loadtxt('Data/dataG.csv', delimiter=',')
+
+#----------
+#Stomach
+#----------
 
 def Stomach(kjs):
     S = np.zeros_like(time)
@@ -41,6 +52,52 @@ def Stomach(kjs):
         S[i] = S[i-1] + dSdt*dt
     return S
 
+def objectiveS(x, data):
+    S = Stomach(x)
+    S_ = np.zeros(len(data))
+    T = list(range(1, len(data)+1))
+    for i in range(0, len(S_)):
+        S_[i] = S[T[i]-1]
+    error = np.sum(np.square(S_ - data)) #mean squared error
+    
+    return error
+
+resultS = minimize(objectiveS, x0=0.05, args=(dataS,)) #used to minimize a scalar function of one or more variables
+kjs = resultS.x[0]
+
+#----------
+#Insulin
+#----------
+
+def Insulin(kxi):
+    I = np.zeros_like(time)
+    I[0] = I0
+    for i in range(1, len(time)):
+        if i < 30:
+            dIdt = 0
+        else:
+            dIdt = kxi * (- I[i-1])
+        I[i] = I[i-1] + dIdt*dt
+
+    return I
+
+def objectiveI(x, data):
+    I = Insulin(x)
+    I_ = np.zeros(len(data))
+    T = list(range(1, len(data)+1))
+    for i in range(0, len(I_)):
+        I_[i] = I[T[i]-1]
+    error = np.sum(np.square(I_ - data)) #mean squared error
+    
+    return error
+
+resultI = minimize(objectiveI, x0=0.05, args=(dataI,)) #used to minimize a scalar function of one or more variables
+kxi = resultI.x[0]
+
+#----------
+#Jejunum
+#----------
+
 def Jejunum(kjs, kgj, kjl):
     J = np.zeros_like(time)
     J[0] = J0
@@ -49,6 +106,41 @@ def Jejunum(kjs, kgj, kjl):
         dJdt = kjs*S[i-1] - kgj*J[i-1] - kjl*J[i-1]
         J[i] = J[i-1] + dJdt*dt
     return J
+
+def objectiveJ(params, data):
+    kgj, kjl = params
+    J = Jejunum(kjs, kgj, kjl)
+    J_ = np.zeros(len(data))
+    T = list(range(1, len(data)+1))
+    for i in range(0, len(J_)):
+        J_[i] = J[T[i]-1]
+    error = np.sum(np.square(J_ - data))  # Mean squared error
+    return error
+
+def jejunum_optimization(initial_guesses, data):
+    best_result = None
+    best_params = None
+    best_error = float('inf')
+
+    for initial_guess in initial_guesses:
+        result = minimize(objectiveJ, x0=initial_guess, args=(data,), method='L-BFGS-B', bounds=[(0.01, 0.1), (0.001, 0.01)])
+        if result.fun < best_error:
+            best_error = result.fun
+            best_params = result.x
+            best_result = result
+
+    return best_result, best_params
+
+initial_guesses = [[0.05, 0.01], [0.07, 0.005], [0.03, 0.008]]  # Add more diverse initial guesses
+best_result, best_params = jejunum_optimization(initial_guesses, dataJ)
+
+kgj, kjl = best_params
+print("Best estimated parameters: kgj =", kgj, "kjl =", kjl)
+
+
+#----------
+#Ileum
+#----------
 
 def Ileum(kjs, kgj, kjl, kgl):
     L = np.zeros_like(time)
@@ -65,125 +157,42 @@ def Ileum(kjs, kgj, kjl, kgl):
         L[i] = L[i-1] + dLdt*dt
     return L
 
-def Insulin(kxi):
-    I = np.zeros_like(time)
-    I[0] = I0
-    for i in range(1, len(time)):
-        if i < 30:
-            dIdt = 0
-        else:
-            dIdt = kxi * (- I[i-1])
-        I[i] = I[i-1] + dIdt*dt
 
-    return I
-
-
-def Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x):
-    #G_ = np.zeros_like(time)
-    #G_[0] = G0
-    G = np.zeros_like(time)
-    G[0] = G0
-    I = Insulin(kxi)
-    S = Stomach(kjs)
-    J = Jejunum(kjs, kgj, kjl)
-    L = Ileum(kjs, kgj, kjl, kgl)
-    Gprod = np.zeros_like(time)
-
-
-    for i in range(1, len(time)):
-        Gprod[i] = (klambda * (Gb-G[i-1])) / (k2 + (Gb - x)) + Gprod[0] 
-        
-        '''#klambda - mM2 min−1 Kinetic constant for hepatic glucose release rate
-
-        
-        #G_[i] = G[i-1] + np.sum(fgj * (kgj * J[i-1] + kgl * L[i-1])) not needed in a person with type 1 diabetes
-
-        
-        # when a value >0 is given for G0 then dGdt will give the natural loss of glucose.
-        # also making there be no bolus then J and L are 0. also I is 0 as there is no administration of insuline
-        # therefore dGdt is just -kxg*G[i-1]
-
-        # dIdt = kxi * Ib * ((beta**Y + 1) / ((beta**Y * (Gb/G_[i-1]))**Y + 1) - I[i-1]/Ib) #look at each part of the equation in the paper
-        # beta and gamma are not needed in a diabetic person because they are not producing insulin. beta and gamma are parameters for half saturation and acceleration of the insulin production 
-        # insulin can take up to 30 mins before it starts to work. 1 to 3 hours for the peak activity. https://www.diabetes.co.uk/insulin/insulin-actions-and-durations.html
-        # can replace the acceleration with a delay? also may need to account for basal insulin or "left over insulin" in the body
-        # dIdt = kxi * Ib * ((1) / (((Gb/G_[i-1])) + 1) - I[i-1]/Ib)'''
-        if i < 30:
-            dGdt = -kxg*G[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
-        else:
-            dGdt = -kxg*G[i-1] - kxgi*G[i-1]*I[i-1] + Gprod[i-1] + n*(kgj*J[i-1] + kgl*L[i-1])
-        G[i] = G[i-1] + dGdt*dt # when dgdt*dt becomes <0 find value of dgdt. this gives natural loss of glucose in the blood.
-
-    return S, G, I, J, L, Gprod
-
-dataS = np.loadtxt('Data/dataS.csv', delimiter=',')
-dataJ = np.loadtxt('Data/dataJ.csv', delimiter=',')
-dataL = np.loadtxt('Data/dataL.csv', delimiter=',')
-dataGprod = np.loadtxt('Data/dataGprod.csv', delimiter=',')
-dataI = np.loadtxt('Data/dataI.csv', delimiter=',')
-dataG = np.loadtxt('Data/dataG.csv', delimiter=',')
-
-
-
-#parameter fitting
-
-def objectiveS(x, data):
-    S = Stomach(x)
-    S_ = np.zeros(len(data))
+def objectiveL(x, data):
+    L = Ileum(kjs, kgj, kjl, x)
+    L_ = np.zeros(len(data))
     T = list(range(1, len(data)+1))
-    for i in range(0, len(S_)):
-        S_[i] = S[T[i]-1]
-    error = np.sum(np.square(S_ - data)) #mean squared error
+    for i in range(0, len(L_)):
+        L_[i] = L[T[i]-1]
+    error = np.sum(np.square(L_ - data)) #mean squared error
     
     return error
 
-#stomach
-resultS = minimize(objectiveS, x0=0.05, args=(dataS,)) #used to minimize a scalar function of one or more variables
-kjs = resultS.x[0]
+def ileum_optimization(initial_guesses, data):
+    best_result = None
+    best_params = None
+    best_error = float('inf')
 
-#insulin supplimentary function for parameter fitting
-def insulin(kxi):
-    I = np.zeros_like(time)
-    I[0] = I0
-    for i in range(1, len(time)):
-        if time[i] < 30:
-            dIdt = 0
-        else:
-            dIdt = kxi * (- I[i-1])
-        I[i] = I[i-1] + dIdt*dt
-    return I
+    for initial_guess in initial_guesses:
+        result = minimize(objectiveL, x0=initial_guess, args=(data,), method='L-BFGS-B', bounds=[(0.001, 0.1)])
+        if result.fun < best_error:
+            best_error = result.fun
+            best_params = result.x
+            best_result = result
 
-#insulin parameter fitting
-def objectiveI(x, data):
-    I = insulin(x)
-    I_ = np.zeros(len(data))
-    T = list(range(1, len(data)+1))
-    for i in range(0, len(I_)):
-        I_[i] = I[T[i]-1]
-    error = np.sum(np.square(I_ - data)) #mean squared error
-    
-    return error
+    return best_result, best_params
 
-resultI = minimize(objectiveI, x0=0.05, args=(dataI,)) #used to minimize a scalar function of one or more variables
-kxi = resultI.x[0]
+initial_guesses = [[0.02], [0.015], [0.025], [0.01], [0.03]] 
+best_result, best_params = ileum_optimization(initial_guesses, dataL)
 
-def error_function(params):
-    # Get the model predictions using the current parameters
-    S, G, I, J, L, Gprod = Glucose_Insulin_Fixed(*params)
+kgl = best_params[0]
 
-    # Calculate the error (sum of squared differences) between the model predictions and the data
-    error_S = np.sum((S - dataS)**2)
-    error_G = np.sum((G - dataG)**2)
-    error_I = np.sum((I - dataI)**2)
-    error_J = np.sum((J - dataJ)**2)
-    error_L = np.sum((L - dataL)**2)
-    error_Gprod = np.sum((Gprod - dataGprod)**2)
 
-    # Return the total error
-    return error_S + error_G + error_I + error_J + error_L + error_Gprod
-    #return error_G
+#----------
+#GI
+#----------
 
-def Glucose_Insulin_Fixed(kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x):
+def Glucose_Insulin(kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x):
     G = np.zeros_like(time)
     G[0] = G0
     Gprod = np.zeros_like(time)
@@ -203,53 +212,59 @@ def Glucose_Insulin_Fixed(kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x):
 
     return S, G, I, J, L, Gprod
 
-
-# Set the bounds for the parameters
-bounds = [(0.01, 0.1), (0.004, 0.01), (0.01, 0.06), (0.01, 0.06), (0.01, 0.05), (0.005, 0.05), (0.4, 0.8), (12, 25), (12, 26)]
-
-# Use differential_evolution to find the best parameters
-result = differential_evolution(error_function, bounds, strategy='best1bin', popsize=50, mutation=(0.5, 1), recombination=0.7, tol=0.01)
-print(result)
-
-# Get the optimal parameters from the result
-optimal_params = result.x
+def objective(params, data):
+    kxg, kxgi, n, klambda, k2, x = params
+    _, G, _, _, _, _ = Glucose_Insulin(kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x)
+    error = np.sum(np.square(G[:len(data)] - data))  # Mean squared error
+    return error
 
 
-kgj = optimal_params[0]
-kjl = optimal_params[1]
-kgl = optimal_params[2]
-kxg = optimal_params[3]
-kxgi = optimal_params[4]
-n = optimal_params[5]
-klambda = optimal_params[6]
-k2 = optimal_params[7]
-x = optimal_params[8]
+#kxg, kxgi, n, klambda, k2, x
+# Initial guesses for the parameters
+x0 = [0.01, 0.01, 0.01, 0.1, 17, 17]
+
+# Bounds for the parameters
+bounds = [(0.001, 0.05), (0.001, 0.05), (0.001, 0.05), (0.1, 1), (5, 30), (5, 30)]
+
+# Minimize the objective function
+result = minimize(objective, x0=x0, args=(dataG,), bounds=bounds, method='L-BFGS-B')
+
+# Extract optimized parameters
+kxg, kxgi, n, klambda, k2, x = result.x
+
+S_Optimized = Stomach(kjs)
+I_Optimized = Insulin(kxi)
+J_Optimized = Jejunum(kjs, kgj, kjl)
+L_Optimized = Ileum(kjs, kgj, kjl, kgl)
+_, GI_Optimized, _, _, _, _ = Glucose_Insulin(kgj, kjl, kgl, kxg, kxgi, n, klambda, k2, x)
+
 
 IP = [0.034, 0.025, 0.067, 0.007, 0.02, 0.018, 0.028, 0.01, 0.6, 22, 16]
 print("Param | Init | Fitted \n ---------------- \n kjs | ", IP[0], " | ", kjs, " \n kxi | ", IP[1], " | ", kxi, " \n kgj | ", IP[2], " | ", kgj, " \n kjl | ", IP[3], " | ", kjl, " \n kgl | ", IP[4], " | ", kgl, " \n kxg | ", IP[5], " | ", kxg, " \n kxgi | ", IP[6], " | ", kxgi, " \n n | ", IP[7], " | ", n, " \n klambda | ", IP[8], " | ", klambda, " \n k2 | ", IP[9], " | ", k2, " \n x | ", IP[10], " | ", x, " \n ---------------- \n")
 
+# Data and labels
+data = [(S_Optimized, dataS, 'Stomach'),
+        (I_Optimized, dataI, 'Insulin'),
+        (J_Optimized, dataJ, 'Jejunum'),
+        (L_Optimized, dataL, 'Ileum'),
+        (GI_Optimized, dataG, 'Glucose-Insulin')]
 
+# Create subplots
+fig, axs = plt.subplots(2, 3, figsize=(15, 10))
 
-# Run the simulation with the optimal parameters and compare the results with the data
-S_opt, G_opt, I_opt, J_opt, L_opt, Gprod_opt = Glucose_Insulin(kjs, kgj, kjl, kgl, kxi, kxg, kxgi, n, klambda, k2, x)
+# Plot each data set in a subplot
+for ax, (optimized, actual, label) in zip(axs.flat, data):
+    ax.plot(time, optimized, label=f'Fitted {label}', color='blue')
+    ax.scatter(time[:len(actual)], actual, label='Actual Data', color='red', marker='x')
+    ax.set_xlabel('Time')
+    ax.set_ylabel(label)
+    ax.set_title(f'{label} with Fitted Parameters vs Actual Data')
+    ax.legend()
+    ax.grid(True)
 
+# Remove the last empty subplot
+fig.delaxes(axs[1, 2])
 
-
-def plot_simulation_vs_experiment(time, sim_data, exp_data, labels, ylabels, xlabel=None):
-    plt.figure(figsize=(12, 12))
-    for i, (sim, exp, label, ylabel) in enumerate(zip(sim_data, exp_data, labels, ylabels), 1):
-        plt.subplot(3, 2, i)
-        plt.plot(time, sim, label=f"Simulated {label}")
-        plt.plot(time, exp, label=f"Experimental {label}")
-        plt.ylabel(ylabel)
-        plt.legend()
-        if i > 4:
-            plt.xlabel(xlabel)
-    plt.show()
-
-simulated_data = [G_opt, I_opt, J_opt, L_opt, Gprod_opt, S_opt]
-experimental_data = [dataG, dataI, dataJ, dataL, dataGprod, dataS]
-labels = ["Glucose", "Insulin", "Jejunum", "Ileum", "Gprod", "Stomach"]
-ylabels = ["Glucose Concentration", "Insulin Concentration", "Jejunum Concentration", "Ileum Concentration", "Gprod Concentration", "Stomach Concentration"]
-
-plot_simulation_vs_experiment(time, simulated_data, experimental_data, labels, ylabels, xlabel="Time")
+# Adjust layout
+plt.tight_layout()
+plt.show()
